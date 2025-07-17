@@ -1,54 +1,63 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <title>{{ name }}'s Dashboard</title>
-  <style>
-    body {
-      font-family: Arial;
-      margin: 40px;
-      background-color: #f0f2f5;
-    }
-    h2 { color: #444; }
-    table {
-      border-collapse: collapse;
-      width: 100%;
-      margin-top: 20px;
-    }
-    th, td {
-      padding: 10px;
-      border: 1px solid #ccc;
-      text-align: left;
-    }
-    th {
-      background-color: #fafafa;
-    }
-  </style>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Tonova Dashboard</title>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet"/>
 </head>
-<body>
-  <h2>📁 Dashboard: {{ name }}</h2>
-  <p><b>User ID:</b> {{ user_id }}</p>
-  <p><b>Points:</b> {{ points }}</p>
-  <p><b>Storage Used:</b> {{ used_size_mb }} MB / 10240 MB</p>
+<body class="bg-gray-100 text-gray-800">
 
-  <h3>Your Files:</h3>
-  {% if files %}
-  <table>
-    <tr>
-      <th>File Name</th>
-      <th>Size (KB)</th>
-      <th>IPFS Link</th>
-    </tr>
-    {% for file in files %}
-    <tr>
-      <td>{{ file.name }}</td>
-      <td>{{ file.size }}</td>
-      <td><a href="{{ file.link }}" target="_blank">Open</a></td>
-    </tr>
-    {% endfor %}
-  </table>
-  {% else %}
-    <p>No files uploaded yet.</p>
-  {% endif %}
+  <div class="max-w-md mx-auto my-6 p-4 bg-white rounded-xl shadow-md">
+    <h2 class="text-xl font-bold mb-4">👤 Dashboard</h2>
+
+    <div class="mb-4">
+      <canvas id="storageChart" height="180"></canvas>
+      <p class="text-center text-sm mt-2">Used: {{ used_mb }} MB / 10240 MB</p>
+    </div>
+
+    <div class="mb-4">
+      <p class="font-semibold">⭐ Points: {{ points }}</p>
+    </div>
+
+    <div>
+      <h3 class="text-md font-semibold mb-2">📂 Your Files</h3>
+      {% if files %}
+        <ul class="space-y-2">
+          {% for file in files %}
+          <li class="bg-gray-100 p-2 rounded-md">
+            <a href="https://{{ file.cid }}.ipfs.w3s.link" class="text-blue-600" target="_blank">{{ file.name }}</a>
+            <p class="text-xs text-gray-500">{{ (file.size/1024)|round(1) }} KB</p>
+          </li>
+          {% endfor %}
+        </ul>
+      {% else %}
+        <p class="text-gray-500">No files uploaded yet.</p>
+      {% endif %}
+    </div>
+  </div>
+
+  <script>
+    const used = {{ used_mb }};
+    const remaining = 10240 - used;
+
+    new Chart(document.getElementById("storageChart"), {
+      type: 'doughnut',
+      data: {
+        labels: ['Used', 'Free'],
+        datasets: [{
+          data: [used, remaining],
+          backgroundColor: ['#4F46E5', '#E5E7EB'],
+        }]
+      },
+      options: {
+        cutout: '70%',
+        plugins: {
+          legend: { display: false },
+        }
+      }
+    });
+  </script>
 </body>
 </html>

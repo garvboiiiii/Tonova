@@ -13,7 +13,7 @@
         <div class="flex justify-between items-center">
             <div>
                 <h1 class="text-4xl font-bold">🚀 Tonova Dashboard</h1>
-                <p class="text-gray-400">Welcome to your Web3 cloud overview.</p>
+                <p class="text-gray-400">Decentralized file storage powered by Web3.Storage</p>
             </div>
             <div class="flex items-center gap-4">
                 <img src="https://avatars.githubusercontent.com/u/9919?s=200&v=4" class="w-14 h-14 rounded-full border-2 border-blue-500" alt="User Avatar">
@@ -26,8 +26,7 @@
 
         <!-- Stats Cards -->
         <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
-
-            <!-- Storage Ring -->
+            <!-- Storage Used -->
             <div class="bg-gray-800 p-6 rounded-2xl flex flex-col items-center shadow-md">
                 <canvas id="storageChart" width="140" height="140"></canvas>
                 <p class="mt-4 text-lg font-semibold">{{ used_mb }} MB used</p>
@@ -42,18 +41,18 @@
 
             <!-- File Count -->
             <div class="bg-blue-600 p-6 rounded-2xl text-center shadow-md">
-                <h2 class="text-xl font-semibold mb-2">📁 Total Files</h2>
+                <h2 class="text-xl font-semibold mb-2">📁 Files</h2>
                 <p class="text-4xl font-bold">{{ files|length }}</p>
             </div>
         </div>
 
-        <!-- Chart Section -->
+        <!-- File Upload Stats -->
         <div class="bg-gray-800 p-6 rounded-2xl shadow-lg">
             <h2 class="text-xl font-semibold mb-4">📊 Upload Stats</h2>
             <canvas id="fileChart" height="120"></canvas>
         </div>
 
-        <!-- Files List -->
+        <!-- File List -->
         <div class="bg-gray-800 p-6 rounded-2xl shadow-lg">
             <h2 class="text-xl font-semibold mb-4">📂 Uploaded Files</h2>
             {% if files %}
@@ -79,9 +78,8 @@
 
     </div>
 
-    <!-- Charts Script -->
+    <!-- Charts -->
     <script>
-        // Storage Chart (Ring)
         const used = {{ used_mb }};
         const total = 10240;
         const percent = Math.min(Math.round((used / total) * 100), 100);
@@ -96,7 +94,7 @@
                 }]
             },
             options: {
-                cutout: '80%',
+                cutout: '75%',
                 plugins: {
                     tooltip: { enabled: false },
                     legend: { display: false },
@@ -104,12 +102,10 @@
             }
         });
 
-        // File Size Chart
-        const fileChart = document.getElementById('fileChart').getContext('2d');
         const fileLabels = {{ files | map(attribute='name') | list | tojson }};
         const fileSizes = {{ files | map(attribute='size') | list | tojson }};
 
-        new Chart(fileChart, {
+        new Chart(document.getElementById('fileChart'), {
             type: 'bar',
             data: {
                 labels: fileLabels,

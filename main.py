@@ -9,7 +9,7 @@ from telebot.types import InlineKeyboardMarkup, InlineKeyboardButton
 # --- CONFIG ---
 API_URL = "https://api.web3.storage"
 BOT_TOKEN = os.getenv("BOT_TOKEN")
-WEBHOOK_URL = "https://<your-render-subdomain>.onrender.com/"  # TODO: Replace this
+WEBHOOK_URL = "https://tonova.onrender.com/"  # TODO: Replace this
 
 app = Flask(__name__)
 bot = telebot.TeleBot(BOT_TOKEN)

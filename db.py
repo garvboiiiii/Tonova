@@ -88,3 +88,18 @@ def get_used_space(user_id):
     row = cur.fetchone()
     conn.close()
     return row[0] if row and row[0] else 0
+
+
+# get_dashboard_data(user_id)
+def get_dashboard_data(user_id):
+    conn = sqlite3.connect("users.db")
+    cursor = conn.cursor()
+    cursor.execute('SELECT name, points FROM users WHERE user_id=?', (user_id,))
+    user = cursor.fetchone()
+
+    cursor.execute('SELECT name, cid, size FROM files WHERE user_id=?', (user_id,))
+    files = cursor.fetchall()
+
+    conn.close()
+    return user, files
+

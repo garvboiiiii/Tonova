@@ -1,0 +1,23 @@
+# Python
+__pycache__/
+*.py[cod]
+*.sqlite3
+*.db
+*.log
+
+# Virtual environments
+venv/
+.venv/
+
+# Environment variables
+.env
+*.env
+
+# Render output or local deploy cache
+*.egg-info/
+dist/
+build/
+
+# System files
+.DS_Store
+Thumbs.db

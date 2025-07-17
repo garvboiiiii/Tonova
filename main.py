@@ -1,150 +1,171 @@
-import os
-import sqlite3
-import requests
-import json
-from flask import Flask, request
 import telebot
-from telebot.types import InlineKeyboardMarkup, InlineKeyboardButton
+from telebot.types import InlineKeyboardMarkup, InlineKeyboardButton, WebAppInfo
+import sqlite3
+import os
+from flask import Flask, request, render_template_string, jsonify
+import requests
 
-# --- CONFIG ---
-API_URL = "https://api.web3.storage"
 BOT_TOKEN = os.getenv("BOT_TOKEN")
-WEBHOOK_URL = "https://tonova.onrender.com/"  # TODO: Replace this
+WEBHOOK_URL = os.getenv("WEBHOOK_URL")  # e.g. https://your-app.onrender.com
+WEB3_API_BASE = "https://api.web3.storage"
 
-app = Flask(__name__)
 bot = telebot.TeleBot(BOT_TOKEN)
+app = Flask(__name__)
 
-# --- DB SETUP ---
+# --- Database Setup ---
 conn = sqlite3.connect("data.db", check_same_thread=False)
 c = conn.cursor()
 c.execute('''CREATE TABLE IF NOT EXISTS users (id INTEGER PRIMARY KEY, token TEXT, points INTEGER DEFAULT 0)''')
-c.execute('''CREATE TABLE IF NOT EXISTS files (user_id INTEGER, name TEXT, cid TEXT, size INTEGER)''')
+c.execute('''CREATE TABLE IF NOT EXISTS files (user_id INTEGER, cid TEXT, name TEXT, size INTEGER)''')
 conn.commit()
 
-# --- HELPERS ---
-def get_user(user_id):
-    c.execute("SELECT * FROM users WHERE id = ?", (user_id,))
-    return c.fetchone()
+# --- Bot Buttons ---
+def main_buttons(user_id):
+    markup = InlineKeyboardMarkup()
+    markup.row_width = 2
+    markup.add(
+        InlineKeyboardButton("📤 Upload File", callback_data="upload"),
+        InlineKeyboardButton("📁 My Files", callback_data="files"),
+        InlineKeyboardButton("🔐 Add Web3 Token", callback_data="token"),
+        InlineKeyboardButton("📊 Dashboard", web_app=WebAppInfo(url=f"{WEBHOOK_URL}/dashboard/{user_id}"))
+    )
+    return markup
 
-def add_user(user_id):
+# --- Bot Commands ---
+@bot.message_handler(commands=['start'])
+def welcome(message):
+    user_id = message.from_user.id
+    username = message.from_user.first_name or "there"
     c.execute("INSERT OR IGNORE INTO users (id, points) VALUES (?, 0)", (user_id,))
     conn.commit()
+    welcome_text = (
+        f"👋 Welcome, {username}, to *Tonova* — a next-gen cloud powered by Web3.Storage!\n\n"
+        "🚀 Here's what you can do:\n"
+        "📤 Upload files securely to IPFS\n"
+        "📎 Share links and manage your uploads\n"
+        "📥 Download anytime — all decentralized\n\n"
+        "🔐 Your data is end-to-end encrypted, powered by your personal API token.\n"
+        "👇 Use the buttons below to get started!"
+    )
+    
+    bot.send_message(
+        message.chat.id,
+        welcome_text,
+        reply_markup=main_buttons(user_id),
+        parse_mode="Markdown"
+    )
 
-def set_token(user_id, token):
-    c.execute("UPDATE users SET token = ? WHERE id = ?", (token, user_id))
-    conn.commit()
+# --- Handle Buttons ---
+@bot.callback_query_handler(func=lambda call: True)
+def handle_buttons(call):
+    user_id = call.from_user.id
 
-def add_points(user_id, pts):
-    c.execute("UPDATE users SET points = points + ? WHERE id = ?", (pts, user_id))
-    conn.commit()
-
-def add_file(user_id, name, cid, size):
-    c.execute("INSERT INTO files VALUES (?, ?, ?, ?)", (user_id, name, cid, size))
-    conn.commit()
-
-def get_user_files(user_id):
-    c.execute("SELECT name, cid, size FROM files WHERE user_id = ?", (user_id,))
-    return c.fetchall()
-
-def get_storage_used(token):
-    headers = {"Authorization": f"Bearer {token}"}
-    resp = requests.get(f"{API_URL}/user/uploads", headers=headers)
-    total = sum(f['dagSize'] for f in resp.json())
-    return total
-
-# --- COMMANDS ---
-@bot.message_handler(commands=["start"])
-def start(msg):
-    user_id = msg.from_user.id
-    add_user(user_id)
-    bot.send_message(user_id, "👋 Welcome! Please set your Web3.Storage token using /token <your_token>\nDon't have one? Sign up at https://web3.storage and get your token.")
-
-@bot.message_handler(commands=["token"])
-def set_user_token(msg):
-    token = msg.text.split(" ", 1)[-1].strip()
-    if len(token) < 10:
-        bot.send_message(msg.chat.id, "❌ Invalid token.")
-        return
-    set_token(msg.from_user.id, token)
-    bot.send_message(msg.chat.id, "✅ Token saved! Now send a file to upload.")
+    if call.data == "upload":
+        bot.send_message(user_id, "Send me a file to upload (max 100MB).")
+    elif call.data == "files":
+        c.execute("SELECT cid, name FROM files WHERE user_id = ?", (user_id,))
+        rows = c.fetchall()
+        if not rows:
+            bot.send_message(user_id, "No files found.")
+        else:
+            msg = "📁 *Your Files:*\n"
+            for cid, name in rows:
+                msg += f"\n🔗 [{name}](https://{cid}.ipfs.w3s.link)"
+            bot.send_message(user_id, msg, parse_mode='Markdown')
+    elif call.data == "token":
+        bot.send_message(user_id, "Please paste your Web3.Storage API token. Create one here: https://web3.storage/account")
 
 @bot.message_handler(content_types=['document'])
-def upload_file(msg):
-    user = get_user(msg.from_user.id)
-    if not user or not user[1]:
-        bot.send_message(msg.chat.id, "⚠️ Please set your Web3 token first using /token.")
+def upload_file(message):
+    user_id = message.from_user.id
+    c.execute("SELECT token FROM users WHERE id = ?", (user_id,))
+    result = c.fetchone()
+
+    if not result or not result[0]:
+        bot.reply_to(message, "⚠️ You need to set your Web3.Storage API token first.")
         return
 
-    token = user[1]
-    used = get_storage_used(token)
-    if used >= 10 * 1024**3:
-        bot.send_message(msg.chat.id, "🚫 You have reached your 10GB storage limit.")
+    token = result[0]
+    file_info = bot.get_file(message.document.file_id)
+    file_bytes = bot.download_file(file_info.file_path)
+
+    # Check quota
+    quota = get_storage_usage(token)
+    if quota >= 10 * 1024 * 1024 * 1024:
+        bot.reply_to(message, "🚫 Storage quota exceeded.")
         return
 
-    file_info = bot.get_file(msg.document.file_id)
-    downloaded_file = bot.download_file(file_info.file_path)
-    filename = msg.document.file_name
-
-    files = {"file": (filename, downloaded_file)}
+    files = {"file": (message.document.file_name, file_bytes)}
     headers = {"Authorization": f"Bearer {token}"}
-    res = requests.post(f"{API_URL}/upload", files=files, headers=headers)
+    res = requests.post(f"{WEB3_API_BASE}/upload", headers=headers, files=files)
 
     if res.status_code == 200:
         cid = res.json()["cid"]
-        add_file(msg.from_user.id, filename, cid, msg.document.file_size)
-        add_points(msg.from_user.id, 10)
-        bot.send_message(msg.chat.id, f"✅ File uploaded: {cid}\nEarned 10 points.")
+        c.execute("INSERT INTO files (user_id, cid, name, size) VALUES (?, ?, ?, ?)",
+                  (user_id, cid, message.document.file_name, message.document.file_size))
+        c.execute("UPDATE users SET points = points + 10 WHERE id = ?", (user_id,))
+        conn.commit()
+        bot.send_message(user_id, f"✅ File uploaded! [Link](https://{cid}.ipfs.w3s.link)", parse_mode='Markdown')
     else:
-        bot.send_message(msg.chat.id, "❌ Upload failed.")
+        bot.send_message(user_id, "❌ Upload failed.")
 
-@bot.message_handler(commands=["files"])
-def show_files(msg):
-    files = get_user_files(msg.from_user.id)
-    if not files:
-        bot.send_message(msg.chat.id, "📁 No files uploaded yet.")
-        return
-    text = "📂 Your Files:\n\n"
-    for name, cid, size in files:
-        text += f"🗂️ {name} — {round(size/1024, 2)} KB\n🔗 https://{cid}.ipfs.w3s.link\n\n"
-    bot.send_message(msg.chat.id, text)
+@bot.message_handler(func=lambda m: True)
+def handle_token(message):
+    user_id = message.from_user.id
+    if len(message.text.strip()) > 20:
+        c.execute("UPDATE users SET token = ? WHERE id = ?", (message.text.strip(), user_id))
+        conn.commit()
+        bot.reply_to(message, "✅ API token saved.")
 
-@bot.message_handler(commands=["points"])
-def show_points(msg):
-    user = get_user(msg.from_user.id)
-    bot.send_message(msg.chat.id, f"🏆 Your Points: {user[2]}")
+# --- Helper ---
+def get_storage_usage(token):
+    headers = {"Authorization": f"Bearer {token}"}
+    res = requests.get(f"{WEB3_API_BASE}/user/uploads", headers=headers)
+    if res.status_code != 200:
+        return 0
+    data = res.json()
+    return sum(f.get("dagSize", 0) for f in data)
 
-@bot.message_handler(commands=["dashboard"])
-def dashboard(msg):
-    user = get_user(msg.from_user.id)
-    if not user:
-        return
-    files = get_user_files(msg.from_user.id)
-    points = user[2]
-    token = user[1]
-    used = get_storage_used(token) if token else 0
-    quota = 10 * 1024**3
+# --- WebApp HTML ---
+@app.route("/dashboard/<int:user_id>")
+def dashboard(user_id):
+    c.execute("SELECT token, points FROM users WHERE id = ?", (user_id,))
+    user = c.fetchone()
+    c.execute("SELECT name, cid, size FROM files WHERE user_id = ?", (user_id,))
+    files = c.fetchall()
 
-    text = f"📊 Dashboard:\n\n"
-    text += f"🔐 Token set: {'✅' if token else '❌'}\n"
-    text += f"🧾 Files: {len(files)}\n"
-    text += f"💾 Storage used: {round(used / (1024**2), 2)} MB / 10240 MB\n"
-    text += f"🏆 Points: {points}"
-    bot.send_message(msg.chat.id, text)
+    quota = get_storage_usage(user[0]) if user and user[0] else 0
+    used_mb = round(quota / (1024 * 1024), 2)
+    file_list = "".join(f"<li><a href='https://{cid}.ipfs.w3s.link'>{name}</a> - {round(size/1024,1)} KB</li>" for name, cid, size in files)
 
-# --- WEBHOOK SETUP ---
-@app.route(f"/{BOT_TOKEN}", methods=["POST"])
+    return render_template_string(f"""
+    <html>
+    <head><title>Dashboard</title></head>
+    <body>
+    <h2>Your Dashboard</h2>
+    <p><b>Points:</b> {user[1] if user else 0}</p>
+    <p><b>Used Storage:</b> {used_mb} MB / 10240 MB</p>
+    <ul>{file_list or '<li>No files uploaded yet.</li>'}</ul>
+    </body>
+    </html>
+    """)
+
+# --- Webhook Setup ---
+@app.route("/" + BOT_TOKEN, methods=['POST'])
 def webhook():
     bot.process_new_updates([telebot.types.Update.de_json(request.stream.read().decode("utf-8"))])
-    return "ok"
+    return "", 200
 
 @app.route("/")
 def index():
-    return "Bot Running"
+    return "🤖 Bot running."
 
+# --- Start ---
 if __name__ == '__main__':
     import logging
-    import sys
-    logging.basicConfig(stream=sys.stdout, level=logging.INFO)
+    logging.basicConfig(level=logging.INFO)
+
+    # Set webhook (one time)
     bot.remove_webhook()
-    bot.set_webhook(url=WEBHOOK_URL + BOT_TOKEN)
-    app.run(host="0.0.0.0", port=10000)
+    bot.set_webhook(url=f"{WEBHOOK_URL}/{BOT_TOKEN}")
+    app.run(host='0.0.0.0', port=5000)

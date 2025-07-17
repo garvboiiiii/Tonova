@@ -1,85 +1,133 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <title>Tonova Dashboard</title>
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
-  <style>
-    body {
-      background: #f2f4f8;
-      font-family: 'Segoe UI', sans-serif;
-    }
-    .container {
-      max-width: 480px;
-      margin: auto;
-      padding: 2rem 1rem;
-    }
-    .card {
-      border-radius: 1.5rem;
-      box-shadow: 0 6px 20px rgba(0,0,0,0.1);
-    }
-    .progress {
-      height: 20px;
-      border-radius: 10px;
-      overflow: hidden;
-    }
-    .file-item {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      padding: 0.5rem 1rem;
-      border-bottom: 1px solid #eee;
-    }
-    .file-name {
-      font-weight: 500;
-    }
-    .btn-purple {
-      background-color: #6f42c1;
-      color: #fff;
-    }
-  </style>
+    <meta charset="UTF-8">
+    <title>Tonova Dashboard</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 </head>
-<body>
+<body class="bg-gradient-to-br from-gray-900 to-gray-800 text-white min-h-screen py-10 px-4">
+    <div class="max-w-6xl mx-auto space-y-10">
 
-<div class="container">
-  <div class="text-center mb-4">
-    <h3>Welcome to Tonova 👋</h3>
-    <p class="text-muted">Decentralized storage powered by Web3.Storage</p>
-  </div>
-
-  <div class="card p-4 mb-4">
-    <h5>Storage Usage</h5>
-    <p>{{ used_mb }} MB / 10240 MB</p>
-    <div class="progress mb-3">
-      <div class="progress-bar bg-success" role="progressbar" style="width: {{ (used_mb / 10240 * 100) | round(1) }}%">
-        {{ (used_mb / 10240 * 100) | round(1) }}%
-      </div>
-    </div>
-    <button class="btn btn-purple w-100">Upgrade Your Plan</button>
-  </div>
-
-  <div class="card p-4 mb-4">
-    <h5 class="mb-3">📁 My Files</h5>
-    {% if files %}
-      {% for file in files %}
-        <div class="file-item">
-          <div>
-            <div class="file-name">{{ file.name }}</div>
-            <small>{{ (file.size / 1024) | round(1) }} KB</small>
-          </div>
-          <a class="btn btn-outline-primary btn-sm" href="https://{{ file.cid }}.ipfs.w3s.link" target="_blank">Open</a>
+        <!-- Header -->
+        <div class="flex justify-between items-center">
+            <div>
+                <h1 class="text-4xl font-bold">🚀 Tonova Dashboard</h1>
+                <p class="text-gray-400">Welcome to your Web3 cloud overview.</p>
+            </div>
+            <div class="flex items-center gap-4">
+                <img src="https://avatars.githubusercontent.com/u/9919?s=200&v=4" class="w-14 h-14 rounded-full border-2 border-blue-500" alt="User Avatar">
+                <div>
+                    <p class="font-semibold">👤 User ID: {{ user_id }}</p>
+                    <p class="text-sm text-gray-400">Points: {{ points }}</p>
+                </div>
+            </div>
         </div>
-      {% endfor %}
-    {% else %}
-      <p class="text-muted">No files uploaded yet.</p>
-    {% endif %}
-  </div>
 
-  <div class="text-center">
-    <p><strong>Points:</strong> {{ points }}</p>
-  </div>
-</div>
+        <!-- Stats Cards -->
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
 
+            <!-- Storage Ring -->
+            <div class="bg-gray-800 p-6 rounded-2xl flex flex-col items-center shadow-md">
+                <canvas id="storageChart" width="140" height="140"></canvas>
+                <p class="mt-4 text-lg font-semibold">{{ used_mb }} MB used</p>
+                <p class="text-sm text-gray-400">of 10240 MB total</p>
+            </div>
+
+            <!-- Points -->
+            <div class="bg-purple-700 p-6 rounded-2xl text-center shadow-md">
+                <h2 class="text-xl font-semibold mb-2">🏆 Points</h2>
+                <p class="text-4xl font-bold">{{ points }}</p>
+            </div>
+
+            <!-- File Count -->
+            <div class="bg-blue-600 p-6 rounded-2xl text-center shadow-md">
+                <h2 class="text-xl font-semibold mb-2">📁 Total Files</h2>
+                <p class="text-4xl font-bold">{{ files|length }}</p>
+            </div>
+        </div>
+
+        <!-- Chart Section -->
+        <div class="bg-gray-800 p-6 rounded-2xl shadow-lg">
+            <h2 class="text-xl font-semibold mb-4">📊 Upload Stats</h2>
+            <canvas id="fileChart" height="120"></canvas>
+        </div>
+
+        <!-- Files List -->
+        <div class="bg-gray-800 p-6 rounded-2xl shadow-lg">
+            <h2 class="text-xl font-semibold mb-4">📂 Uploaded Files</h2>
+            {% if files %}
+                <ul class="space-y-3">
+                    {% for file in files %}
+                        <li class="bg-gray-700 p-4 rounded-xl hover:bg-gray-600 transition">
+                            <div class="flex justify-between items-center">
+                                <div>
+                                    <a href="https://{{ file.cid }}.ipfs.w3s.link" class="text-blue-300 hover:underline" target="_blank">
+                                        {{ file.name }}
+                                    </a>
+                                    <p class="text-sm text-gray-400">{{ (file.size / 1024) | round(1) }} KB</p>
+                                </div>
+                                <span class="text-xs bg-green-500 text-white px-3 py-1 rounded-full">IPFS</span>
+                            </div>
+                        </li>
+                    {% endfor %}
+                </ul>
+            {% else %}
+                <p class="text-gray-400">No files uploaded yet.</p>
+            {% endif %}
+        </div>
+
+    </div>
+
+    <!-- Charts Script -->
+    <script>
+        // Storage Chart (Ring)
+        const used = {{ used_mb }};
+        const total = 10240;
+        const percent = Math.min(Math.round((used / total) * 100), 100);
+
+        new Chart(document.getElementById('storageChart'), {
+            type: 'doughnut',
+            data: {
+                datasets: [{
+                    data: [percent, 100 - percent],
+                    backgroundColor: ['#4F46E5', '#1F2937'],
+                    borderWidth: 0
+                }]
+            },
+            options: {
+                cutout: '80%',
+                plugins: {
+                    tooltip: { enabled: false },
+                    legend: { display: false },
+                }
+            }
+        });
+
+        // File Size Chart
+        const fileChart = document.getElementById('fileChart').getContext('2d');
+        const fileLabels = {{ files | map(attribute='name') | list | tojson }};
+        const fileSizes = {{ files | map(attribute='size') | list | tojson }};
+
+        new Chart(fileChart, {
+            type: 'bar',
+            data: {
+                labels: fileLabels,
+                datasets: [{
+                    label: 'Size (KB)',
+                    data: fileSizes.map(s => s / 1024),
+                    backgroundColor: '#3B82F6'
+                }]
+            },
+            options: {
+                scales: {
+                    y: { beginAtZero: true }
+                },
+                plugins: {
+                    legend: { display: false }
+                }
+            }
+        });
+    </script>
 </body>
 </html>

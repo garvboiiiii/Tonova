@@ -2,11 +2,11 @@ import telebot
 from telebot.types import InlineKeyboardMarkup, InlineKeyboardButton, WebAppInfo
 import sqlite3
 import os
-from flask import Flask, request, render_template_string, jsonify
+from flask import Flask, request, render_template, jsonify
 import requests
 
 BOT_TOKEN = os.getenv("BOT_TOKEN")
-WEBHOOK_URL = os.getenv("WEBHOOK_URL")  # e.g. https://your-app.onrender.com
+WEBHOOK_URL = os.getenv("WEBHOOK_URL")
 WEB3_API_BASE = "https://api.web3.storage"
 
 bot = telebot.TeleBot(BOT_TOKEN)
@@ -47,7 +47,7 @@ def welcome(message):
         "🔐 Your data is end-to-end encrypted, powered by your personal API token.\n"
         "👇 Use the buttons below to get started!"
     )
-    
+
     bot.send_message(
         message.chat.id,
         welcome_text,
@@ -89,7 +89,6 @@ def upload_file(message):
     file_info = bot.get_file(message.document.file_id)
     file_bytes = bot.download_file(file_info.file_path)
 
-    # Check quota
     quota = get_storage_usage(token)
     if quota >= 10 * 1024 * 1024 * 1024:
         bot.reply_to(message, "🚫 Storage quota exceeded.")
@@ -112,10 +111,14 @@ def upload_file(message):
 @bot.message_handler(func=lambda m: True)
 def handle_token(message):
     user_id = message.from_user.id
-    if len(message.text.strip()) > 20:
-        c.execute("UPDATE users SET token = ? WHERE id = ?", (message.text.strip(), user_id))
+    text = message.text.strip()
+
+    if "eyJ" in text and len(text) > 20:
+        c.execute("UPDATE users SET token = ? WHERE id = ?", (text, user_id))
         conn.commit()
         bot.reply_to(message, "✅ API token saved.")
+    else:
+        bot.reply_to(message, "❌ Invalid token. Please enter a valid Web3.Storage token.")
 
 # --- Helper ---
 def get_storage_usage(token):
@@ -126,7 +129,7 @@ def get_storage_usage(token):
     data = res.json()
     return sum(f.get("dagSize", 0) for f in data)
 
-# --- WebApp HTML ---
+# --- Dashboard ---
 @app.route("/dashboard/<int:user_id>")
 def dashboard(user_id):
     c.execute("SELECT token, points FROM users WHERE id = ?", (user_id,))
@@ -136,21 +139,13 @@ def dashboard(user_id):
 
     quota = get_storage_usage(user[0]) if user and user[0] else 0
     used_mb = round(quota / (1024 * 1024), 2)
-    file_list = "".join(f"<li><a href='https://{cid}.ipfs.w3s.link'>{name}</a> - {round(size/1024,1)} KB</li>" for name, cid, size in files)
 
-    return render_template_string(f"""
-    <html>
-    <head><title>Dashboard</title></head>
-    <body>
-    <h2>Your Dashboard</h2>
-    <p><b>Points:</b> {user[1] if user else 0}</p>
-    <p><b>Used Storage:</b> {used_mb} MB / 10240 MB</p>
-    <ul>{file_list or '<li>No files uploaded yet.</li>'}</ul>
-    </body>
-    </html>
-    """)
+    return render_template("dashboard.html", files=[
+        {"name": name, "cid": cid, "size": size}
+        for name, cid, size in files
+    ], points=user[1], used_mb=used_mb)
 
-# --- Webhook Setup ---
+# --- Webhook ---
 @app.route("/" + BOT_TOKEN, methods=['POST'])
 def webhook():
     bot.process_new_updates([telebot.types.Update.de_json(request.stream.read().decode("utf-8"))])
@@ -165,7 +160,6 @@ if __name__ == '__main__':
     import logging
     logging.basicConfig(level=logging.INFO)
 
-    # Set webhook (one time)
     bot.remove_webhook()
     bot.set_webhook(url=f"{WEBHOOK_URL}/{BOT_TOKEN}")
     app.run(host='0.0.0.0', port=5000)

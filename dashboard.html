@@ -1,63 +1,85 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <meta charset="UTF-8">
   <title>Tonova Dashboard</title>
-  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-  <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+  <style>
+    body {
+      background: #f2f4f8;
+      font-family: 'Segoe UI', sans-serif;
+    }
+    .container {
+      max-width: 480px;
+      margin: auto;
+      padding: 2rem 1rem;
+    }
+    .card {
+      border-radius: 1.5rem;
+      box-shadow: 0 6px 20px rgba(0,0,0,0.1);
+    }
+    .progress {
+      height: 20px;
+      border-radius: 10px;
+      overflow: hidden;
+    }
+    .file-item {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 0.5rem 1rem;
+      border-bottom: 1px solid #eee;
+    }
+    .file-name {
+      font-weight: 500;
+    }
+    .btn-purple {
+      background-color: #6f42c1;
+      color: #fff;
+    }
+  </style>
 </head>
-<body class="bg-gray-100 text-gray-800">
+<body>
 
-  <div class="max-w-md mx-auto my-6 p-4 bg-white rounded-xl shadow-md">
-    <h2 class="text-xl font-bold mb-4">👤 Dashboard</h2>
-
-    <div class="mb-4">
-      <canvas id="storageChart" height="180"></canvas>
-      <p class="text-center text-sm mt-2">Used: {{ used_mb }} MB / 10240 MB</p>
-    </div>
-
-    <div class="mb-4">
-      <p class="font-semibold">⭐ Points: {{ points }}</p>
-    </div>
-
-    <div>
-      <h3 class="text-md font-semibold mb-2">📂 Your Files</h3>
-      {% if files %}
-        <ul class="space-y-2">
-          {% for file in files %}
-          <li class="bg-gray-100 p-2 rounded-md">
-            <a href="https://{{ file.cid }}.ipfs.w3s.link" class="text-blue-600" target="_blank">{{ file.name }}</a>
-            <p class="text-xs text-gray-500">{{ (file.size/1024)|round(1) }} KB</p>
-          </li>
-          {% endfor %}
-        </ul>
-      {% else %}
-        <p class="text-gray-500">No files uploaded yet.</p>
-      {% endif %}
-    </div>
+<div class="container">
+  <div class="text-center mb-4">
+    <h3>Welcome to Tonova 👋</h3>
+    <p class="text-muted">Decentralized storage powered by Web3.Storage</p>
   </div>
 
-  <script>
-    const used = {{ used_mb }};
-    const remaining = 10240 - used;
+  <div class="card p-4 mb-4">
+    <h5>Storage Usage</h5>
+    <p>{{ used_mb }} MB / 10240 MB</p>
+    <div class="progress mb-3">
+      <div class="progress-bar bg-success" role="progressbar" style="width: {{ (used_mb / 10240 * 100) | round(1) }}%">
+        {{ (used_mb / 10240 * 100) | round(1) }}%
+      </div>
+    </div>
+    <button class="btn btn-purple w-100">Upgrade Your Plan</button>
+  </div>
 
-    new Chart(document.getElementById("storageChart"), {
-      type: 'doughnut',
-      data: {
-        labels: ['Used', 'Free'],
-        datasets: [{
-          data: [used, remaining],
-          backgroundColor: ['#4F46E5', '#E5E7EB'],
-        }]
-      },
-      options: {
-        cutout: '70%',
-        plugins: {
-          legend: { display: false },
-        }
-      }
-    });
-  </script>
+  <div class="card p-4 mb-4">
+    <h5 class="mb-3">📁 My Files</h5>
+    {% if files %}
+      {% for file in files %}
+        <div class="file-item">
+          <div>
+            <div class="file-name">{{ file.name }}</div>
+            <small>{{ (file.size / 1024) | round(1) }} KB</small>
+          </div>
+          <a class="btn btn-outline-primary btn-sm" href="https://{{ file.cid }}.ipfs.w3s.link" target="_blank">Open</a>
+        </div>
+      {% endfor %}
+    {% else %}
+      <p class="text-muted">No files uploaded yet.</p>
+    {% endif %}
+  </div>
+
+  <div class="text-center">
+    <p><strong>Points:</strong> {{ points }}</p>
+  </div>
+</div>
+
 </body>
 </html>
